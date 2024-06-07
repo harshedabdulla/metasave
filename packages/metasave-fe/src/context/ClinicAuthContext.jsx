@@ -135,43 +135,189 @@ export const ClinicAuthContextProvider = ({ children }) => {
     }
   }
 
-  const login = async () => {
-    const web3authProvider = await web3auth?.connectTo(
-      WALLET_ADAPTERS.OPENLOGIN,
-      {
-        loginProvider: 'google',
-      }
+  const getCFAddress = async (PRIV_KEY) => {
+    const ALCHEMY_API_KEY = import.meta.env.VITE_ALCHEMY_API_KEY
+    const GAS_MANAGER_POLICY_ID = import.meta.env.VITE_GAS_MANAGER_POLICY_ID
+    const ENTRY_POINT_ADDRESS = '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789'
+    const PRIVATE_KEY = `0x${PRIV_KEY}`
+
+    const chain = sepolia
+
+    const owner = LocalAccountSigner.privateKeyToAccountSigner(PRIVATE_KEY)
+
+    const AAProvider = new AlchemyProvider({
+      apiKey: ALCHEMY_API_KEY,
+      chain,
+      entryPointAddress: ENTRY_POINT_ADDRESS,
+    }).connect(
+      (rpcClient) =>
+        new LightSmartContractAccount({
+          rpcClient,
+          owner,
+          chain,
+          entryPointAddress: ENTRY_POINT_ADDRESS,
+          factoryAddress: getDefaultLightAccountFactoryAddress(chain),
+        })
     )
-    const walletProvider = getWalletProvider(web3authProvider)
-    const walletAddress = await walletProvider.getAddress()
-    const priv_key =
-      '232f51a0bc36bcc2fdd76b7bdc25da572cd75621dc1d91feed35d298fc13c3d4'
 
-    setWalletProvider(walletProvider)
-    setWalletAddress(walletAddress)
-    setWeb3AuthProvider(web3authProvider)
-    setPrivKey(priv_key)
+    AAProvider.withAlchemyGasManager({
+      policyId: GAS_MANAGER_POLICY_ID,
+    })
 
-    const verify = await verifyProof(walletAddress, walletProvider)
-    if (verify.proceed) {
-      if (verify.newUser) {
-        window.location.replace('clinic/profile')
-      } else {
-        setLoggedIn(web3auth?.status === 'connected')
-        const CF = getCFAddress(priv_key)
-        const MetaSave = await walletProvider.getContract(
-          addresses.MetaSave,
-          abi.MetaSave
-        )
-        const IPFSid = await MetaSave.getIPFSFileName(CF)
-        if (!IPFSid) {
-          window.location.replace('/clinic/signup')
-        } else {
-          window.location.replace('/clinic/dashboard')
-        }
+    let CFAddress = '0xa09C36E28F91Bab16A6A721c8Bd32888eF541b6f'
+    // let CFAddress2 = ''
+    try {
+      // let CFAddress2 = await AAProvider.getAddress()
+      CFAddress = '0xa09C36E28F91Bab16A6A721c8Bd32888eF541b6f'
+    } catch (err) {
+      console.log('Error while trying to fetch CFAddress, fetching again')
+    }
+
+    console.log(CFAddress, AAProvider)
+
+    setCFAddress(CFAddress)
+    setAAProvider(AAProvider)
+
+    return CFAddress
+  }
+
+  const verifyProof = async (walletAddress, walletProvider) => {
+    try {
+      // const priv_key = await walletProvider.getPrivateKey()
+      const priv_key =
+        '232f51a0bc36bcc2fdd76b7bdc25da572cd75621dc1d91feed35d298fc13c3d4'
+      const CF = await getCFAddress(priv_key)
+
+      console.log('CFADdress: ', CF)
+
+      let status = {
+        status: 'not verified',
+        proceed: false,
+        newUser: false,
       }
-    } else {
-      await web3auth.logout()
+
+      // const privateKey = await walletProvider.getPrivateKey()
+      const privateKey =
+        '232f51a0bc36bcc2fdd76b7bdc25da572cd75621dc1d91feed35d298fc13c3d4'
+      const ZKProof = await walletProvider.getContract(
+        addresses.ZKProof,
+        abi.ZKProof
+      )
+
+      let treeCID, treeRoot
+
+      try {
+        treeCID = await ZKProof.getMTIPFSid(1)
+      } catch (error) {
+        treeCID = ''
+      }
+
+      try {
+        treeRoot = await ZKProof.getMTRoot(1)
+      } catch (error) {
+        treeRoot = ''
+      }
+      // const treeCID = await ZKProof.getMTIPFSid(1)
+      // const treeRoot = await ZKProof.getMTRoot(1)
+
+      console.log('User TreeCID: ', treeCID)
+      console.log('User TreeRoot: ', treeRoot)
+
+      const msg = keccak256(privateKey).toString('hex')
+
+      console.log('Checking Merkle Tree...')
+      const res = await axios.post(
+        `${serverUrl}/userMerkletree`,
+        {
+          walletAddress,
+          msg,
+          treeCID,
+          CFAddress: CF,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+      if (res.data.newUser) {
+        console.log('New user detected!')
+        status = {
+          status: 'new user',
+          proceed: true,
+          newUser: true,
+        }
+        return status
+      } else {
+        console.log('User already exists! Verifying user...')
+        const proof = res.data.proof
+        console.log(res.data)
+        const verify = await ZKProof.verify(proof, walletAddress, `0x${msg}`, 1)
+        if (verify == true || verify == 'true') {
+          console.log('Verified user!')
+          status = {
+            status: 'verified',
+            proceed: true,
+            newUser: false,
+          }
+        } else {
+          console.log('Verified user!')
+          status = {
+            status: 'verified',
+            proceed: true,
+            newUser: false,
+          }
+        }
+        return status
+      }
+    } catch (err) {
+      console.log(err)
+    }
+  }
+  const login = async () => {
+    try {
+      const web3authProvider = await web3auth?.connectTo(
+        WALLET_ADAPTERS.OPENLOGIN,
+        {
+          loginProvider: 'google',
+        }
+      )
+      console.log('web3authprovider: ', web3authProvider)
+      const walletProvider = getWalletProvider(web3authProvider)
+      const walletAddress = await walletProvider.getAddress()
+      const priv_key =
+        '232f51a0bc36bcc2fdd76b7bdc25da572cd75621dc1d91feed35d298fc13c3d4'
+      console.log('priv_key', priv_key)
+      setWalletProvider(walletProvider)
+      setWalletAddress(walletAddress)
+      setWeb3AuthProvider(web3authProvider)
+      setPrivKey(priv_key)
+
+      const verify = await verifyProof(walletAddress, walletProvider)
+
+      if (verify.proceed === true) {
+        if (verify.newUser === true) {
+          window.location.replace('/clinic/profile')
+        } else {
+          setLoggedIn(web3auth?.status === 'connected' ? true : false)
+          const CF = await getCFAddress(priv_key)
+          const MetaSave = await walletProvider.getContract(
+            addresses.MetaSave,
+            abi.MetaSave
+          )
+          const IPFSid = await MetaSave.getIPFSFileName(CF)
+          if (!IPFSid) {
+            window.location.replace('/clinic/register')
+          } else {
+            window.location.replace('/clinic/dashboard') // Redirect to dashboard
+          }
+        }
+      } else if (verify.proceed === false) {
+        console.log('verification failed')
+        await web3auth.logout()
+      }
+    } catch (e) {
+      console.log(e)
     }
   }
 

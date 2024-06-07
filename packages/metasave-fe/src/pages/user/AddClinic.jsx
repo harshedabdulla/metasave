@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import Sidebar from '../components/Dashboard/Sidebar'
-import searchIcon from '../assets/search.png'
-import mapIcon from '../assets/map.png'
+import Sidebar from '../../components/Dashboard/Sidebar'
+import searchIcon from '../../assets/search.png'
+import mapIcon from '../../assets/map.png'
 
 const AddClinic = () => {
   const [searchTerm, setSearchTerm] = useState('')

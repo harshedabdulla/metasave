@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
-import Sidebar from '../components/Dashboard/Sidebar'
+import Sidebar from '../../components/Dashboard/Sidebar'
 import Modal from './Modal' // Make sure this path is correct
-import { useMainContext } from '../context/MainContext'
-import { useAuthContext } from '../context/AuthContext'
-import { abi } from '../abi'
-import { addresses } from '../constants/addresses'
+import { useMainContext } from '../../context/MainContext'
+import { useAuthContext } from '../../context/AuthContext'
+import { abi } from '../../abi'
+import { addresses } from '../../constants/addresses'
 // import { createBluetooth } from 'node-ble'
 import axios from 'axios'
 
@@ -18,21 +18,27 @@ const AddDevice = () => {
   const [modalOpen, setModalOpen] = useState(false)
   const [newDevice, setNewDevice] = useState({ name: '', date: '', type: '' })
 
-  const saveToBlockchain = async() => {
+  const saveToBlockchain = async () => {
     try {
       const uoCallData = encodeFunctionData({
         abi: abi.MetaSave,
-        functionName: "addDevice", 
-        args: [CFAddress, newDevice.name, newDevice.id, newDevice.ip, newDevice.date],
+        functionName: 'addDevice',
+        args: [
+          CFAddress,
+          newDevice.name,
+          newDevice.id,
+          newDevice.ip,
+          newDevice.date,
+        ],
       })
       const uo = await AAProvider.sendUserOperation({
         target: addresses.MetaSave,
         data: uoCallData,
-      });
-  
+      })
+
       const txHash = await AAProvider.waitForUserOperationTransaction(uo.hash)
-      if(txHash){
-        console.log("TX HASH: ", txHash)
+      if (txHash) {
+        console.log('TX HASH: ', txHash)
         window.location.replace('/dashboard')
       }
     } catch (error) {
@@ -40,66 +46,71 @@ const AddDevice = () => {
     }
   }
 
-  const sendPrivKeyToDevice = async(type) => {
-    try{
-      
+  const sendPrivKeyToDevice = async (type) => {
+    try {
       const res = await axios.post('http://localhost:8000/privkey', {
         privKey,
-        type
+        type,
       })
-      if(res){
+      if (res) {
         console.log(res.data.message)
         console.log('Device ID Received!', res.data.deviceId)
         return res.data.deviceId
       }
-    }catch(err){
+    } catch (err) {
       console.log('Error while sending device to server: ', err)
       return 0
     }
   }
 
-  const generateProof = async(deviceId) => {
-    try{
-      const ZKProof = await walletProvider.getContract(addresses.ZKProof, abi.ZKProof)
-      
+  const generateProof = async (deviceId) => {
+    try {
+      const ZKProof = await walletProvider.getContract(
+        addresses.ZKProof,
+        abi.ZKProof
+      )
+
       let treeCID, treeRoot
-      
+
       try {
         treeCID = await ZKProof.getMTIPFSid(0)
       } catch (error) {
-        treeCID = ""
+        treeCID = ''
       }
 
       try {
         treeRoot = await ZKProof.getMTRoot(0)
       } catch (error) {
-        treeRoot = ""
+        treeRoot = ''
       }
 
-      console.log("Device TreeCID: ", treeCID)
-      console.log("Device TreeRoot: ", treeRoot)
-      
-      console.log('Checking Merkle Tree...')
-      const res = await axios.post(`${serverUrl}/deviceMerkletree`, {
-        deviceId,
-        treeCID,
-        CFAddress
-      },
-      {
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+      console.log('Device TreeCID: ', treeCID)
+      console.log('Device TreeRoot: ', treeRoot)
 
-      if(res){
+      console.log('Checking Merkle Tree...')
+      const res = await axios.post(
+        `${serverUrl}/deviceMerkletree`,
+        {
+          deviceId,
+          treeCID,
+          CFAddress,
+        },
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      )
+
+      if (res) {
         console.log('Proof generated and stored in server!')
       }
-    }catch(err){
+    } catch (err) {
       console.log('Error while generating proof: ', err)
     }
   }
 
-  const handleAddDevice = async() => {
+  const handleAddDevice = async () => {
     newDevice.date = new Date().toLocaleDateString()
     setDevices([...devices, newDevice])
     setNewDevice({ name: '', id: '', ip: '', date: '' })
@@ -133,7 +144,10 @@ const AddDevice = () => {
             <h3 className="text-lg leading-6 font-medium text-gray-900">
               Add new device
             </h3>
-            <p className='text-red-500 text-sm'>*Both the device to be added and the current device should be connected to the same WiFi network.</p>
+            <p className="text-red-500 text-sm">
+              *Both the device to be added and the current device should be
+              connected to the same WiFi network.
+            </p>
             <div className="mt-2">
               <input
                 type="text"
@@ -153,11 +167,11 @@ const AddDevice = () => {
                 }
                 className="mt-2 px-4 py-2 bg-white text-sm w-full border rounded-md"
               /> */}
-              <select 
-                name="" 
+              <select
+                name=""
                 id=""
                 className="mt-2 px-4 py-2 bg-white text-sm w-full border rounded-md"
-                onChange={(e) => 
+                onChange={(e) =>
                   setNewDevice({ ...newDevice, type: e.target.value })
                 }
               >
